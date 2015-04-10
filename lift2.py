@@ -1,7 +1,7 @@
 from boxlift_api import Command, BoxLift
 from pprint import pprint
 
-box_lift = BoxLift('Lolevator', 'training_1', 'aywang31@gmail.com', '13247', event_name='pycon2015', sandbox_mode=True)
+box_lift = BoxLift('Lolevator', 'ch_rnd_500_1', 'aywang31@gmail.com', '13247', event_name='pycon2015', sandbox_mode=False)
 
 state = box_lift.send_commands()
 pprint(state)
@@ -17,7 +17,7 @@ def get_state_for_elevator(elevator_id, state):
             elevator['speed'] = elevator_states[elevator['id']]['speed']
             elevator['direction'] = elevator_states[elevator['id']]['direction']
             return elevator
-    raise "Unknown elevator %s" % elevator_id
+    raise RuntimeError("Unknown elevator %s" % elevator_id)
 
 def floor_requests(elevator, state):
     return set(elevator['buttons_pressed'] + [request['floor'] for request in state['requests']])
@@ -37,7 +37,7 @@ def direction(elevator, state):
         else:
             return 1
     else:
-        return 'Error - unknown elevator direction'
+        raise RuntimeError('Error - unknown elevator direction')
 
 def stop_direction(floor, state):
     for request in state['requests']:
@@ -61,8 +61,19 @@ def iterate_elevator(elevator_id, state):
     else:
         return Command(elevator_id, 1, 0)
 
+iteration_count = 0
 while state['status'] != 'finished':
-    command = iterate_elevator(0, state)
-    state = box_lift.send_commands([command])
+    commands = []
+    elevator_id = 0
+    while elevator_id < (iteration_count / 10) + 1 and elevator_id < len(state['elevators']):
+        command = iterate_elevator(elevator_id, state)
+        elevator_states[elevator_id]['speed'] = command.speed
+        elevator_states[elevator_id]['direction'] = command.direction
+        commands.append(command)
+        elevator_id += 1
+    iteration_count += 1
+
+    state = box_lift.send_commands(commands)
     pprint(state)
+    print iteration_count
 
