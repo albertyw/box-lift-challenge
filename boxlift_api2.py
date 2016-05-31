@@ -1,13 +1,9 @@
 import json
-# This is to keep this imports to a minimum and work on
-# Python 2.x and 3.x
-try:
-    import urllib.request as urllib2
-except ImportError:
-    import urllib2
+from sys import exit
+from websocket import create_connection
 
 
-PYCON2016_EVENT_NAME = 'pycon2016'
+PYCON2016_EVENT_NAME = 'pycon2015'
 
 
 class Command(object):
@@ -43,7 +39,7 @@ class Command(object):
 
 
 class BoxLift(object):
-    HOST = 'http://codelift.org'
+    HOST = 'ws://codelift.org'
 
     def __init__(self, bot_name, plan, email, registration_id,
                  event_name='', sandbox_mode=False):
@@ -94,24 +90,24 @@ class BoxLift(object):
         if registration_id:
             initialization_data['event_id'] = registration_id
 
+        self.websocket = create_connection('ws://codelift.org/v2/building')
+        res = self.websocket.recv()
+        if res != '{"status":"connected","message":"Connected"}':
+            raise('unexpected connection failure:' + res)
         state = self._get_world_state(initialization_data)
         if state['status'] == 'error':
             print(state['message'])
-        self.game_id = state['id']
-        self.token = state['token']
+            exit()
         self.status = state['status']
-        self.building_url = state['building']
-        # fix building_url
-        self.building_url = self.url_root() + "/" + self.game_id
-        self.visualization_url = state['visualization']
         print(state['message'])
-        print('building url: {}'.format(self.building_url))
-        print('visualization url: {}'.format(self.visualization_url))
+        # print('building url: {}'.format(self.building_url))
+        # print('visualization url: {}'.format(self.visualization_url))
+
 
     def _get_world_state(self, initialization_data):
         """Initialize and gets the state of the world without sending
         any commands to advance the clock"""
-        return self._post(self.url_root(), initialization_data)
+        return self._post(initialization_data)
 
     def send_commands(self, commands=None):
         """Send commands to advance the clock. Returns the new state of
@@ -133,15 +129,14 @@ class BoxLift(object):
             command_list[command.id] = {
                 'speed': command.speed, 'direction': command.direction
             }
-        data = {'token': self.token, 'commands': command_list}
-        state = self._post(self.building_url, data)
-        print("status: {}".format(state['status']))
-        if state['status'].lower() == 'error':
+        data = {'commands': command_list}
+        state = self._post(data)
+        status = state['status'].lower()
+        print("status: {}".format(status))
+        if status == 'error':
             print("message: {}".format(state['message']))
-        if 'token' in state:
-            self.token = state['token']
-        else:
-            print('no token this turn')
+        elif status == 'finished':
+            print("finished! Score: {} Watch result at: {}".format(state['score'], state['visualization']))
         if 'requests' not in state:
             state['requests'] = []
         for elevator_data in state.get('elevators', []):
@@ -152,15 +147,12 @@ class BoxLift(object):
 
     @classmethod
     def url_root(cls):
-        return cls.HOST + "/v1/buildings"
+        return cls.HOST + "/v2/buildings"
 
-    def _post(self, url, data):
-        """wrapper to encode/decode our data and the return value"""
-        print url
-
-        req = urllib2.Request(url, json.dumps(data).encode('utf-8'))
-        response = urllib2.urlopen(req)
-        res = response.read()
+    def _post(self, data):
+        """wrapper to send our data and get the return value"""
+        self.websocket.send(json.dumps(data).encode('utf-8'))
+        res = self.websocket.recv()
         if isinstance(res, bytes):
             res = res.decode('utf-8')
         try:
