@@ -1,7 +1,7 @@
-from boxlift_api import Command, BoxLift
+from boxlift_api2 import Command, BoxLift
 from pprint import pprint
 
-box_lift = BoxLift('Lolevator', 'ch_rnd_500_1', 'aywang31@gmail.com', '13247', event_name='pycon2015', sandbox_mode=False)
+box_lift = BoxLift('Lolevator', 'training_1', 'aywang31@gmail.com', '16885', event_name='pycon2016', sandbox_mode=False)
 
 state = box_lift.send_commands()
 pprint(state)
